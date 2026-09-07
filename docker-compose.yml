@@ -1,0 +1,17 @@
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: tidimail-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: tidimail
+    ports:
+      - "5434:5432"
+
+  redis:
+    image: redis:7
+    container_name: tidimail-redis
+    ports:
+      - "6379:6379"
