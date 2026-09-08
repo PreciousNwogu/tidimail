@@ -33,12 +33,11 @@ export default function TrustPage() {
 
   return (
     <div className="mx-auto max-w-xl">
-      <p className="kicker">Before we change anything</p>
-      <h1 className="mt-3 font-serif text-4xl tracking-tight">Review first. Then you decide.</h1>
+      <h1 className="font-serif text-4xl tracking-tight">Use Tidimail to tidy Gmail — you stay in control.</h1>
       <p className="mt-5 text-base leading-relaxed text-ink-700">
-        Tidimail starts in <span className="font-medium text-ink-900">Review Mode</span>. We only look at basic email
-        details like the sender, subject, labels, and unsubscribe information. We don&apos;t create a new inbox or
-        change your emails during the review.
+        Review first. Then you decide. Tidimail starts in <span className="font-medium text-ink-900">Review Mode</span>.
+        We only look at basic email details like the sender, subject, labels, and unsubscribe information. We don&apos;t
+        create a new inbox or change your emails during the review.
       </p>
       <p className="mt-4 text-base leading-relaxed text-ink-700">
         Nothing is changed until <span className="font-medium text-ink-900">you choose an action</span>:
@@ -63,7 +62,7 @@ export default function TrustPage() {
         <li className="rounded-2xl bg-white/70 p-4">
           After this first scan, Tidimail checks your mail every day on its own. You do not have to tap Scan again.
         </li>
-        <li className="rounded-2xl bg-white/70 p-4 font-medium text-ink-900">You&apos;re always in control.</li>
+        <li className="rounded-2xl bg-white/70 p-4 font-medium text-ink-900">You stay in control.</li>
       </ul>
       {error ? <p className="mt-4 text-sm text-clay-600">{error}</p> : null}
       <button
