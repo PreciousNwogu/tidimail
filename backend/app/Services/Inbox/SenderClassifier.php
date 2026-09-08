@@ -29,7 +29,7 @@ class SenderClassifier
             return SenderCategory::Receipt;
         }
 
-        if ($labels->contains('CATEGORY_SOCIAL')) {
+        if ($labels->contains('CATEGORY_SOCIAL') || $labels->contains('CATEGORY_FORUMS')) {
             return SenderCategory::Social;
         }
 
@@ -41,11 +41,13 @@ class SenderClassifier
             return SenderCategory::Person;
         }
 
-        if ($hasUnsub || $labels->contains('CATEGORY_UPDATES') || $this->textLooksLikeNewsletter($text)) {
+        if ($hasUnsub || $labels->contains('CATEGORY_UPDATES') || $this->textLooksLikeNewsletter($text) || $this->looksLikeRoleAddress($email)) {
             return SenderCategory::Newsletter;
         }
 
-        return SenderCategory::Unknown;
+        return $labels->contains('CATEGORY_PERSONAL')
+            ? SenderCategory::Person
+            : SenderCategory::Newsletter;
     }
 
     /**
@@ -90,7 +92,7 @@ class SenderClassifier
             );
         }
 
-        if ($purpose === SenderCategory::Social || $labels->contains('CATEGORY_SOCIAL')) {
+        if ($purpose === SenderCategory::Social || $labels->contains('CATEGORY_SOCIAL') || $labels->contains('CATEGORY_FORUMS')) {
             return new ClassificationResult(
                 SenderCategory::Social,
                 SenderRecommendation::Digest,
@@ -121,8 +123,37 @@ class SenderClassifier
             );
         }
 
+        if ($purpose && $purpose !== SenderCategory::Unknown) {
+            return new ClassificationResult(
+                $purpose,
+                $purpose === SenderCategory::Person || $purpose === SenderCategory::Receipt
+                    ? SenderRecommendation::Keep
+                    : SenderRecommendation::Digest,
+                'Filed from the mail we already have for this sender.',
+                $gmailCategories,
+            );
+        }
+
+        if ($this->looksLikeRoleAddress($sender->email) || $sender->has_list_unsubscribe || $labels->contains('CATEGORY_UPDATES')) {
+            return new ClassificationResult(
+                SenderCategory::Newsletter,
+                SenderRecommendation::Digest,
+                'Recurring mail you can read later instead of in the inbox.',
+                $gmailCategories,
+            );
+        }
+
+        if ($labels->contains('CATEGORY_PERSONAL') || $this->looksLikePerson($sender, $labels)) {
+            return new ClassificationResult(
+                SenderCategory::Person,
+                SenderRecommendation::Keep,
+                'Looks like a person, not a list.',
+                $gmailCategories,
+            );
+        }
+
         return new ClassificationResult(
-            SenderCategory::Unknown,
+            SenderCategory::Newsletter,
             SenderRecommendation::Digest,
             'Not clearly personal; we suggest moving it out of the inbox.',
             $gmailCategories,
@@ -166,7 +197,7 @@ class SenderClassifier
             return false;
         }
 
-        if (preg_match('/^(no-?reply|notifications?|news|offers|marketing|hello|info|team|auto-confirm|store-news)@/i', $email)) {
+        if ($this->looksLikeRoleAddress($email)) {
             return false;
         }
 
@@ -179,14 +210,24 @@ class SenderClassifier
             return false;
         }
 
-        if ($labels->contains('CATEGORY_PROMOTIONS') || $labels->contains('CATEGORY_SOCIAL')) {
+        if ($labels->contains('CATEGORY_PROMOTIONS') || $labels->contains('CATEGORY_SOCIAL') || $labels->contains('CATEGORY_FORUMS')) {
             return false;
         }
 
-        if (preg_match('/^(no-?reply|notifications?|news|offers|marketing|hello|info|team|auto-confirm|store-news)@/i', $sender->email)) {
+        if ($this->looksLikeRoleAddress($sender->email)) {
             return false;
         }
 
-        return $sender->message_count <= 3;
+        return $labels->contains('CATEGORY_PERSONAL') || $sender->message_count <= 8;
+    }
+
+    private function looksLikeRoleAddress(string $email): bool
+    {
+        $local = strtolower(strtok($email, '@') ?: $email);
+
+        return (bool) preg_match(
+            '/^(no-?reply|do-?not-?reply|notifications?|news|offers?|marketing|hello|hi|info|team|support|billing|orders?|mailer|newsletter|updates?|auto-confirm|store-news)$/i',
+            $local
+        );
     }
 }

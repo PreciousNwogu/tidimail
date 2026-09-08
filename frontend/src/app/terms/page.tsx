@@ -30,7 +30,11 @@ export default function TermsPage() {
           <Link href="/privacy" className="underline">
             Privacy
           </Link>{" "}
-          page. You can disconnect at any time.
+          page. You can disconnect at any time. Questions:{" "}
+          <a className="underline" href="mailto:tidimail.hello@gmail.com">
+            tidimail.hello@gmail.com
+          </a>
+          .
         </p>
       </div>
 

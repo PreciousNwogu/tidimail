@@ -61,7 +61,15 @@ export default function PrivacyPage() {
         <section>
           <h2 className="font-serif text-2xl">Questions</h2>
           <p className="mt-2 text-ink-700">
-            Use the email address you signed in with to reach us, or disconnect from Account if you want us to stop.
+            Email{" "}
+            <a className="underline" href="mailto:tidimail.hello@gmail.com">
+              tidimail.hello@gmail.com
+            </a>
+            . You can also write from the address you signed in with, or disconnect in{" "}
+            <Link href="/settings" className="underline">
+              Account
+            </Link>{" "}
+            if you want us to stop.
           </p>
         </section>
       </div>

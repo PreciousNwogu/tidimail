@@ -8,6 +8,7 @@ import type {
   MeResponse,
   Paginated,
   ReviewAction,
+  ReviewOptions,
   Sender,
   SweepResponse,
 } from "./types";
@@ -126,13 +127,20 @@ export const api = {
     });
   },
 
-  async senders(params: { status?: string; q?: string } = {}): Promise<Paginated<Sender>> {
-    if (isDemo()) return demoApi.senders(params.status, params.q);
+  async senders(params: { status?: string; q?: string; page?: number; per_page?: number } = {}): Promise<Paginated<Sender>> {
+    if (isDemo()) return demoApi.senders(params.status, params.q, params.page, params.per_page);
     const query = new URLSearchParams();
     if (params.status) query.set("status", params.status);
     if (params.q) query.set("q", params.q);
+    if (params.page) query.set("page", String(params.page));
+    if (params.per_page) query.set("per_page", String(params.per_page));
     const suffix = query.toString() ? `?${query}` : "";
     return request<Paginated<Sender>>(`/api/senders${suffix}`);
+  },
+
+  async pendingIds(): Promise<{ ids: number[]; total: number }> {
+    if (isDemo()) return demoApi.pendingIds();
+    return request<{ ids: number[]; total: number }>("/api/senders/pending-ids");
   },
 
   async sender(id: number): Promise<Sender> {
@@ -140,11 +148,23 @@ export const api = {
     return request<Sender>(`/api/senders/${id}`);
   },
 
-  async review(id: number, action: ReviewAction): Promise<{ sender: Sender; action: InboxAction }> {
-    if (isDemo()) return demoApi.review(id, action);
+  async review(id: number, action: ReviewAction, options?: ReviewOptions): Promise<{ sender: Sender; action: InboxAction }> {
+    if (isDemo()) return demoApi.review(id, action, options);
     return request(`/api/senders/${id}/review`, {
       method: "POST",
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ action, ...(options?.trashNow ? { trash_now: true } : {}) }),
+    });
+  },
+
+  async reviewBulk(senderIds: number[], action: ReviewAction, options?: ReviewOptions): Promise<ApplyResult> {
+    if (isDemo()) return demoApi.reviewBulk(senderIds, action, options);
+    return request<ApplyResult>("/api/senders/review-bulk", {
+      method: "POST",
+      body: JSON.stringify({
+        sender_ids: senderIds,
+        action,
+        ...(options?.trashNow ? { trash_now: true } : {}),
+      }),
     });
   },
 

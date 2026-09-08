@@ -5,6 +5,7 @@ import type {
   MailMessage,
   MeResponse,
   ReviewAction,
+  ReviewOptions,
   Sender,
   SweepResponse,
 } from "./types";
@@ -345,21 +346,28 @@ function canUndo(action: InboxAction): boolean {
   return new Date(action.expires_at).getTime() > Date.now();
 }
 
-function applyAction(state: DemoState, sender: Sender, type: ReviewAction): { sender: Sender; action: InboxAction } {
+function applyAction(
+  state: DemoState,
+  sender: Sender,
+  type: ReviewAction,
+  options?: ReviewOptions,
+): { sender: Sender; action: InboxAction } {
   if (type === "unsubscribe" && !sender.has_list_unsubscribe) {
     throw Object.assign(new Error("No unsubscribe header on this sender. Digest it instead."), { status: 422 });
   }
 
+  const trashNow = Boolean(options?.trashNow) && type !== "keep";
   const nextStatus = type === "unsubscribe" ? "unsubscribed" : type;
+  const now = new Date().toISOString();
   const updated: Sender = {
     ...sender,
     status: nextStatus,
-    reviewed_at: new Date().toISOString(),
+    reviewed_at: now,
     messages: (sender.messages ?? []).map((message) => ({
       ...message,
       is_in_inbox: type === "keep",
-      purge_at: type === "keep" ? null : new Date(Date.now() + 30 * 86_400_000).toISOString(),
-      purged_at: null,
+      purge_at: type === "keep" || trashNow ? null : new Date(Date.now() + 30 * 86_400_000).toISOString(),
+      purged_at: trashNow ? now : null,
     })),
   };
 
@@ -377,7 +385,8 @@ function applyAction(state: DemoState, sender: Sender, type: ReviewAction): { se
         ? { url: "https://example.com/unsub", one_click: true, status: 200, ok: true, body_snippet: "unsubscribed" }
         : null,
     auto_applied: false,
-    created_at: new Date().toISOString(),
+    created_at: now,
+    trashed_now: trashNow,
   };
 
   return { sender: updated, action };
@@ -445,7 +454,7 @@ export const demoApi = {
     return { applied, applied_count: applied.length, failed };
   },
 
-  senders(status?: string, q?: string): { data: Sender[] } {
+  senders(status?: string, q?: string, page = 1, perPage = 25): { data: Sender[]; meta: { current_page: number; last_page: number; total: number } } {
     let rows = read().senders;
     if (status) rows = rows.filter((sender) => sender.status === status);
     if (q) {
@@ -457,7 +466,21 @@ export const demoApi = {
           (sender.domain ?? "").toLowerCase().includes(needle),
       );
     }
-    return { data: rows };
+    const size = Math.max(1, perPage);
+    const lastPage = Math.max(1, Math.ceil(rows.length / size));
+    const current = Math.min(Math.max(1, page), lastPage);
+    const start = (current - 1) * size;
+    return {
+      data: rows.slice(start, start + size),
+      meta: { current_page: current, last_page: lastPage, total: rows.length },
+    };
+  },
+
+  pendingIds(): { ids: number[]; total: number } {
+    const ids = read()
+      .senders.filter((sender) => sender.status === "pending")
+      .map((sender) => sender.id);
+    return { ids, total: ids.length };
   },
 
   sender(id: number): Sender {
@@ -470,16 +493,43 @@ export const demoApi = {
     };
   },
 
-  review(id: number, action: ReviewAction): { sender: Sender; action: InboxAction } {
+  review(id: number, action: ReviewAction, options?: ReviewOptions): { sender: Sender; action: InboxAction } {
     const state = read();
     const current = state.senders.find((row) => row.id === id);
     if (!current) throw Object.assign(new Error("Sender not found"), { status: 404 });
-    const result = applyAction(state, current, action);
+    const result = applyAction(state, current, action, options);
     state.senders = state.senders.map((row) => (row.id === id ? result.sender : row));
     state.nextActionId += 1;
     state.actions.unshift(result.action);
     write(state);
     return result;
+  },
+
+  reviewBulk(ids: number[], action: ReviewAction, options?: ReviewOptions): ApplyResult {
+    const state = read();
+    const applied: InboxAction[] = [];
+    const failed: ApplyResult["failed"] = [];
+
+    for (const id of ids) {
+      const current = state.senders.find((row) => row.id === id);
+      if (!current || current.status !== "pending") {
+        failed.push({ sender_id: id, error: "Already reviewed." });
+        continue;
+      }
+      try {
+        const type = action === "unsubscribe" && !current.has_list_unsubscribe ? "digest" : action;
+        const result = applyAction(state, current, type, options);
+        state.senders = state.senders.map((row) => (row.id === id ? result.sender : row));
+        state.nextActionId += 1;
+        state.actions.unshift(result.action);
+        applied.push(result.action);
+      } catch (error) {
+        failed.push({ sender_id: id, error: error instanceof Error ? error.message : "Failed" });
+      }
+    }
+
+    write(state);
+    return { applied, applied_count: applied.length, failed };
   },
 
   actions(): InboxAction[] {

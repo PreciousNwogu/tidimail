@@ -6,7 +6,7 @@ use App\Enums\InboxActionType;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class ReviewSenderRequest extends FormRequest
+class BulkReviewRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -16,6 +16,8 @@ class ReviewSenderRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'sender_ids' => ['required', 'array', 'min:1', 'max:50'],
+            'sender_ids.*' => ['required', 'integer'],
             'action' => ['required', Rule::enum(InboxActionType::class)],
             'trash_now' => ['sometimes', 'boolean'],
         ];
@@ -30,5 +32,13 @@ class ReviewSenderRequest extends FormRequest
     {
         return $this->boolean('trash_now')
             && in_array($this->action(), [InboxActionType::Unsubscribe, InboxActionType::Digest], true);
+    }
+
+    /**
+     * @return list<int>
+     */
+    public function senderIds(): array
+    {
+        return array_values(array_unique(array_map('intval', $this->validated('sender_ids'))));
     }
 }

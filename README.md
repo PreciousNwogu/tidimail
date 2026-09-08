@@ -34,7 +34,7 @@ php artisan test
 
 ### Frontend (Next.js)
 
-The SPA implements first-run, daily sweep, sender passport, and the undo tray. You can click through a sample inbox without Google.
+The SPA implements first-run, daily sweep, sender passport, and the undo tray. You can click through the demo without Google (fake mail).
 
 ```bash
 cd frontend
@@ -45,7 +45,7 @@ npm run dev
 
 Open http://localhost:3001. On a phone, add Tidimail to the home screen (Share → Add to Home Screen on iOS, or Install on Android) to use it like an app. Mail still lives in Gmail.
 
-Choose **Try a sample inbox**, or **Continue with Google** (Laravel must be running on `NEXT_PUBLIC_API_URL`, default `http://localhost:8000`).
+Choose **Try the demo**, or **Sign in with Google** (Laravel must be running on `NEXT_PUBLIC_API_URL`, default `http://localhost:8000`).
 
 
 

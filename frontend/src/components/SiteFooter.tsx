@@ -12,6 +12,9 @@ export function SiteFooter() {
       <Link href="/install" className="underline decoration-ink-900/20 underline-offset-4">
         Get the app
       </Link>
+      <a href="mailto:tidimail.hello@gmail.com" className="underline decoration-ink-900/20 underline-offset-4">
+        tidimail.hello@gmail.com
+      </a>
     </nav>
   );
 }

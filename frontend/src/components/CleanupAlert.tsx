@@ -41,9 +41,7 @@ export function CleanupAlert() {
       open={open}
       title="Daily scan is ready"
       body={
-        count === 1
-          ? "Tidimail found 1 sender to review. A quick cleanup keeps your inbox light."
-          : `Tidimail found ${count} senders to review. A quick cleanup keeps your inbox light.`
+        count === 1 ? "1 sender to review." : `${count} senders to review.`
       }
       confirmLabel="Review now"
       cancelLabel="Later"

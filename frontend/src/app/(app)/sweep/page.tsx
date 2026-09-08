@@ -1,13 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { SenderCard } from "@/components/SenderCard";
+import Link from "next/link";
+import { PendingReviewList } from "@/components/PendingReviewList";
 import { api } from "@/lib/api";
-import { useReview } from "@/lib/use-review";
 import { useSession } from "@/lib/session";
 import type { SweepResponse } from "@/lib/types";
 import { asList } from "@/lib/types";
-import Link from "next/link";
 
 export default function SweepPage() {
   const { refresh } = useSession();
@@ -20,8 +19,6 @@ export default function SweepPage() {
     await refresh();
   }, [refresh]);
 
-  const { review, pendingId } = useReview(() => load());
-
   useEffect(() => {
     void load().catch((err) =>
       setError(err instanceof Error ? err.message : "Could not load today’s sweep."),
@@ -32,8 +29,7 @@ export default function SweepPage() {
   if (!sweep) return <p className="text-sm text-ink-700">Checking the quiet…</p>;
 
   const needsYou = asList(sweep.needs_you);
-  const today = asList(sweep.senders).filter((sender) => !needsYou.some((row) => row.id === sender.id));
-  const pending = asList(sweep.senders);
+  const pending = sweep.stats.senders_pending;
 
   return (
     <div className="space-y-10">
@@ -42,47 +38,15 @@ export default function SweepPage() {
         <h1 className="mt-2 font-serif text-4xl tracking-tight">Today’s decisions</h1>
       </div>
 
-      {pending.length === 0 ? (
+      {pending === 0 ? (
         <div className="rounded-3xl border border-dashed border-ink-900/15 bg-white/50 px-6 py-16 text-center">
           <h2 className="font-serif text-3xl">Inbox is quiet.</h2>
-          <p className="mt-2 text-ink-700">
-            Tidimail scans every day on its own. New senders will show up here. Gmail stays the inbox.
-          </p>
         </div>
-      ) : null}
-
-      {needsYou.length > 0 ? (
+      ) : (
         <section>
-          <h2 className="font-serif text-2xl tracking-tight">Needs you today</h2>
-          <p className="mt-1 text-sm text-ink-700">People and receipts — not promo.</p>
-          <div className="mt-4 space-y-4">
-            {needsYou.map((sender) => (
-              <SenderCard
-                key={sender.id}
-                sender={sender}
-                pending={pendingId === sender.id ? sender.recommendation : null}
-                onAction={(action) => void review(sender, action)}
-              />
-            ))}
-          </div>
+          <PendingReviewList pinned={needsYou} onChanged={load} />
         </section>
-      ) : null}
-
-      {today.length > 0 ? (
-        <section>
-          <h2 className="font-serif text-2xl tracking-tight">Today’s {Math.min(8, today.length)}</h2>
-          <div className="mt-4 space-y-4">
-            {today.map((sender) => (
-              <SenderCard
-                key={sender.id}
-                sender={sender}
-                pending={pendingId === sender.id ? sender.recommendation : null}
-                onAction={(action) => void review(sender, action)}
-              />
-            ))}
-          </div>
-        </section>
-      ) : null}
+      )}
 
       <details className="rounded-2xl bg-white/60 px-5 py-4">
         <summary className="cursor-pointer text-sm font-medium">Already handled</summary>

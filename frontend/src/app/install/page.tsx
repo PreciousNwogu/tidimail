@@ -17,10 +17,6 @@ export default function InstallPage() {
 
       <p className="kicker mt-12">Get the app</p>
       <h1 className="mt-3 font-serif text-4xl tracking-tight">Put Tidimail on your phone or computer.</h1>
-      <p className="mt-4 text-base leading-relaxed text-ink-700">
-        Tidimail is an installable app. It opens like any other app, but your mail stays in Gmail. After you review
-        senders once, it scans every day in the background — you do not have to start a scan.
-      </p>
 
       <InstallApp variant="hero" />
 
@@ -42,11 +38,6 @@ export default function InstallPage() {
         </li>
       </ol>
 
-      <p className="mt-6 text-sm text-ink-700/80">
-        This is a home-screen app, not an App Store listing. Allow notifications when asked — after each daily scan
-        Tidimail will pop up so you can come back and clean up. Daily scans still run even if the app is closed. Install
-        and notifications need https:// on your real domain — localhost is only for you.
-      </p>
       <div className="mt-10">
         <SiteFooter />
       </div>

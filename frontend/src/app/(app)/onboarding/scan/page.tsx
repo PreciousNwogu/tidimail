@@ -50,16 +50,12 @@ export default function ScanPage() {
           : status === "queued"
             ? "Starting the scan…"
             : status === "ready"
-              ? "Ready to review — still scanning the rest in the background."
+              ? "Ready to review — still scanning the rest."
               : status === "running"
                 ? scanned > 0
-                  ? `Grouped ${scanned.toLocaleString()} recent emails…`
-                  : "Reading promotions, newsletters, and social first…"
+                  ? `Grouped ${scanned.toLocaleString()} emails…`
+                  : "Reading mail…"
                 : status}
-      </p>
-      <p className="mx-auto mt-2 max-w-sm text-sm text-ink-700/80">
-        You can start reviewing as soon as the noisiest senders are grouped. We keep reading the rest of your inbox in
-        the background — sender, subject, labels, and unsubscribe details, never the full body.
       </p>
       {error ? (
         <div className="mt-6 space-y-3">

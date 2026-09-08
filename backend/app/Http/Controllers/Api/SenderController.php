@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Enums\SenderStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\BulkReviewRequest;
 use App\Http\Requests\ReviewSenderRequest;
 use App\Http\Resources\InboxActionResource;
 use App\Http\Resources\SenderResource;
@@ -38,7 +39,50 @@ class SenderController extends Controller
             });
         }
 
-        return SenderResource::collection($query->paginate(25));
+        $perPage = min(100, max(1, (int) $request->query('per_page', 25)));
+
+        return SenderResource::collection($query->paginate($perPage));
+    }
+
+    public function pendingIds(Request $request): JsonResponse
+    {
+        $accountIds = $request->user()->accounts()->pluck('id');
+        $ids = Sender::query()
+            ->whereIn('account_id', $accountIds)
+            ->where('status', SenderStatus::Pending)
+            ->orderByDesc('message_count')
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values();
+
+        return response()->json([
+            'ids' => $ids,
+            'total' => $ids->count(),
+        ]);
+    }
+
+    public function reviewBulk(BulkReviewRequest $request, SenderReviewService $reviews): JsonResponse
+    {
+        $accountIds = $request->user()->accounts()->pluck('id');
+        $ids = $request->senderIds();
+        $found = Sender::query()
+            ->with('account.user')
+            ->whereIn('account_id', $accountIds)
+            ->whereIn('id', $ids)
+            ->get()
+            ->keyBy('id');
+
+        $senders = collect($ids)
+            ->map(fn (int $id) => $found->get($id))
+            ->filter();
+
+        $result = $reviews->reviewMany($senders, $request->action(), $request->trashNow());
+
+        return response()->json([
+            'applied' => InboxActionResource::collection(collect($result['applied'])),
+            'applied_count' => count($result['applied']),
+            'failed' => $result['failed'],
+        ]);
     }
 
     public function show(Request $request, Sender $sender): SenderResource
@@ -57,7 +101,7 @@ class SenderController extends Controller
     {
         $this->authorizeSender($request, $sender);
 
-        $action = $reviews->review($sender, $request->action());
+        $action = $reviews->review($sender, $request->action(), $request->trashNow());
 
         return response()->json([
             'sender' => new SenderResource($sender->refresh()->load(

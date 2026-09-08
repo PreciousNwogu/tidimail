@@ -4,10 +4,10 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, googleRedirectUrl } from "@/lib/api";
+import { isDemo } from "@/lib/auth";
 import { useSession } from "@/lib/session";
 import { QuietScore } from "@/components/QuietScore";
 import { BrandLogo } from "@/components/BrandLogo";
-import { InstallApp } from "@/components/InstallApp";
 import { CleanupAlert } from "@/components/CleanupAlert";
 
 const links = [
@@ -78,6 +78,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </div>
+        {isDemo() ? (
+          <div className="bg-sage-50 px-5 py-2 text-center text-sm text-sage-700">Demo</div>
+        ) : null}
         {reconnect ? (
           <div className="bg-clay-500/10 px-5 py-2 text-center text-sm text-clay-600">
             Gmail expired, tap to reconnect.{" "}
@@ -88,9 +91,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ) : null}
       </header>
       <main className="mx-auto w-full max-w-5xl px-5 py-8 pb-28 sm:pb-8">
-        <div className="mb-6 sm:hidden">
-          <InstallApp />
-        </div>
         {children}
         <CleanupAlert />
       </main>

@@ -44,15 +44,10 @@ export default function ActionsPage() {
     <div>
       <p className="kicker">24 hours</p>
       <h1 className="mt-2 font-serif text-4xl tracking-tight">Undo</h1>
-      <p className="mt-2 max-w-xl text-ink-700">
-        Changed your mind? You have 24 hours to put that mail back in your inbox. Older items stay here as a record.
-      </p>
 
       <div className="mt-8 space-y-3">
         {rows.length === 0 ? (
-          <p className="rounded-2xl bg-white/70 px-5 py-8 text-sm text-ink-700">
-            Nothing to undo yet. Review a sender first, then you can change your mind here.
-          </p>
+          <p className="rounded-2xl bg-white/70 px-5 py-8 text-sm text-ink-700">Nothing to undo yet.</p>
         ) : null}
         {rows.map((action) => (
           <article key={action.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-ink-900/8 bg-white/80 px-4 py-4">

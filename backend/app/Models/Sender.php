@@ -33,6 +33,7 @@ class Sender extends Model
         'recommendation_reason',
         'status',
         'reviewed_at',
+        'trash_unsubscribed_immediately',
         'gmail_categories',
     ];
 
@@ -43,6 +44,7 @@ class Sender extends Model
         'last_message_at' => 'datetime',
         'has_list_unsubscribe' => 'boolean',
         'reviewed_at' => 'datetime',
+        'trash_unsubscribed_immediately' => 'boolean',
         'gmail_categories' => 'array',
         'purpose' => SenderCategory::class,
         'category' => SenderCategory::class,

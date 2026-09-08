@@ -19,9 +19,11 @@ class SenderReviewService
     {
     }
 
-    public function review(Sender $sender, InboxActionType $type): InboxAction
+    public function review(Sender $sender, InboxActionType $type, bool $trashNow = false): InboxAction
     {
         $sender->loadMissing('account.user');
+
+        $trashNow = $trashNow && in_array($type, [InboxActionType::Unsubscribe, InboxActionType::Digest], true);
 
         if ($type === InboxActionType::Unsubscribe && ! $sender->httpUnsubscribeUrl()) {
             throw ValidationException::withMessages([
@@ -31,9 +33,11 @@ class SenderReviewService
 
         $account = $sender->account;
         $alreadyUnsubscribed = $sender->status === SenderStatus::Unsubscribed;
-        $targetMessages = $type === InboxActionType::Keep
-            ? $sender->messages()->orderByDesc('received_at')->limit(100)->get()
-            : $sender->messages()->where('is_in_inbox', true)->get();
+        $targetMessages = match (true) {
+            $type === InboxActionType::Keep => $sender->messages()->orderByDesc('received_at')->limit(100)->get(),
+            $trashNow => $sender->messages()->whereNull('purged_at')->get(),
+            default => $sender->messages()->where('is_in_inbox', true)->get(),
+        };
         $previousLabels = $targetMessages->mapWithKeys(
             fn ($message) => [$message->gmail_id => $message->label_ids ?? []]
         )->all();
@@ -52,15 +56,21 @@ class SenderReviewService
             'metadata' => [
                 'unsubscribe_url' => $sender->httpUnsubscribeUrl(),
                 'one_click' => $sender->supportsOneClickUnsubscribe(),
+                'trash_now' => $trashNow,
+                'previous_trash_unsubscribed_immediately' => (bool) $sender->trash_unsubscribed_immediately,
             ],
             'expires_at' => now()->addHours((int) config('tidimail.undo_hours', 24)),
         ]);
 
-        $this->applyGmailChange($sender, $type, $targetMessages);
+        $this->applyGmailChange($sender, $type, $targetMessages, $trashNow);
 
         $sender->forceFill([
             'status' => $this->statusFor($type),
             'reviewed_at' => now(),
+            'trash_unsubscribed_immediately' => in_array($type, [
+                InboxActionType::Unsubscribe,
+                InboxActionType::Digest,
+            ], true) && $trashNow,
         ])->save();
 
         if ($type === InboxActionType::Unsubscribe && ! $alreadyUnsubscribed) {
@@ -99,11 +109,19 @@ class SenderReviewService
                 fn ($message) => [$message->gmail_id => $message->label_ids ?? []]
             )->all(),
             'previous_sender_status' => $sender->status,
-            'metadata' => ['auto_applied' => true],
+            'metadata' => [
+                'auto_applied' => true,
+                'trash_now' => (bool) $sender->trash_unsubscribed_immediately,
+            ],
             'expires_at' => now()->addHours((int) config('tidimail.undo_hours', 24)),
         ]);
 
-        $this->applyGmailChange($sender, $type, $inboxMessages);
+        $this->applyGmailChange(
+            $sender,
+            $type,
+            $inboxMessages,
+            (bool) $sender->trash_unsubscribed_immediately,
+        );
 
         return $action;
     }
@@ -149,6 +167,42 @@ class SenderReviewService
         return compact('applied', 'failed');
     }
 
+    /**
+     * @param  Collection<int, Sender>  $senders
+     * @return array{applied: list<InboxAction>, failed: list<array{sender_id: int, error: string}>}
+     */
+    public function reviewMany(Collection $senders, InboxActionType $type, bool $trashNow = false): array
+    {
+        $applied = [];
+        $failed = [];
+
+        foreach ($senders as $sender) {
+            if ($sender->status !== SenderStatus::Pending) {
+                $failed[] = [
+                    'sender_id' => $sender->id,
+                    'error' => 'Already reviewed.',
+                ];
+                continue;
+            }
+
+            $resolved = $type;
+            if ($resolved === InboxActionType::Unsubscribe && ! $sender->httpUnsubscribeUrl()) {
+                $resolved = InboxActionType::Digest;
+            }
+
+            try {
+                $applied[] = $this->review($sender, $resolved, $trashNow);
+            } catch (\Throwable $exception) {
+                $failed[] = [
+                    'sender_id' => $sender->id,
+                    'error' => $exception->getMessage(),
+                ];
+            }
+        }
+
+        return compact('applied', 'failed');
+    }
+
     public function undo(InboxAction $action): InboxAction
     {
         if (! $action->canBeUndone()) {
@@ -162,13 +216,14 @@ class SenderReviewService
         $ids = $action->gmail_message_ids ?? [];
 
         $add = ['INBOX'];
-        $remove = array_filter([
+        $remove = array_values(array_filter([
             $account->labelId('digest'),
             $account->labelId('keep'),
             $account->labelId('unsubscribed'),
-        ]);
+            'TRASH',
+        ]));
 
-        $this->gmail->batchModify($account, $ids, $add, array_values($remove));
+        $this->gmail->batchModify($account, $ids, $add, $remove);
 
         $action->sender?->messages()
             ->whereIn('gmail_id', $ids)
@@ -182,6 +237,7 @@ class SenderReviewService
             $action->sender->forceFill([
                 'status' => $action->previous_sender_status,
                 'reviewed_at' => $action->previous_sender_status === SenderStatus::Pending ? null : $action->sender->reviewed_at,
+                'trash_unsubscribed_immediately' => (bool) ($action->metadata['previous_trash_unsubscribed_immediately'] ?? false),
             ])->save();
         }
 
@@ -229,7 +285,7 @@ class SenderReviewService
     /**
      * @param  Collection<int, \App\Models\Message>  $messages
      */
-    private function applyGmailChange(Sender $sender, InboxActionType $type, Collection $messages): void
+    private function applyGmailChange(Sender $sender, InboxActionType $type, Collection $messages, bool $trashNow = false): void
     {
         $account = $sender->account;
         $ids = $messages->pluck('gmail_id')->all();
@@ -240,6 +296,7 @@ class SenderReviewService
             $remove = array_values(array_filter([
                 $account->labelId('digest'),
                 $account->labelId('unsubscribed'),
+                'TRASH',
             ]));
             $this->gmail->batchModify($account, $ids, array_values(array_filter([$keepId, 'INBOX'])), $remove);
             $sender->messages()
@@ -257,6 +314,19 @@ class SenderReviewService
         $labelId = $this->gmail->ensureLabel($account, $labelKey, $labels[$labelKey]);
 
         $this->gmail->batchModify($account, $ids, [$labelId], ['INBOX']);
+
+        if ($trashNow) {
+            $this->gmail->trashMessages($account, $ids);
+            $sender->messages()
+                ->whereIn('gmail_id', $ids)
+                ->update([
+                    'is_in_inbox' => false,
+                    'purge_at' => null,
+                    'purged_at' => now(),
+                ]);
+
+            return;
+        }
 
         $sender->messages()
             ->whereIn('gmail_id', $ids)

@@ -1,4 +1,5 @@
 export type ReviewAction = "keep" | "digest" | "unsubscribe";
+export type ReviewOptions = { trashNow?: boolean };
 export type SenderStatus = "pending" | "keep" | "digest" | "unsubscribed";
 export type SenderCategory = "person" | "receipt" | "newsletter" | "promo" | "social" | "unknown";
 export type SenderRecommendation = ReviewAction;
@@ -66,6 +67,7 @@ export type InboxAction = {
   proof: UnsubscribeProof | null;
   auto_applied: boolean;
   created_at: string | null;
+  trashed_now?: boolean;
 };
 
 export type Sender = {

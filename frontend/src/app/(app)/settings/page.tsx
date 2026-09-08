@@ -48,9 +48,8 @@ export default function SettingsPage() {
     <div className="mx-auto max-w-lg">
       <p className="kicker">Account</p>
       <h1 className="mt-3 font-serif text-4xl tracking-tight">Your Gmail connection.</h1>
-      <p className="mt-3 text-base leading-relaxed text-ink-700">
-        Signed in as <span className="font-medium text-ink-900">{account?.email ?? me?.user.email}</span>. Tidimail
-        only keeps sender details, subjects, labels, and your choices — never full email bodies.
+      <p className="mt-3 text-base text-ink-700">
+        {account?.email ?? me?.user.email}
       </p>
 
       {error ? <p className="mt-4 text-sm text-clay-600">{error}</p> : null}
@@ -61,7 +60,6 @@ export default function SettingsPage() {
           className="block rounded-2xl border border-ink-900/10 bg-white px-5 py-4 text-sm font-medium text-ink-900"
         >
           Reconnect Google
-          <p className="mt-1 font-normal text-ink-700">Use this if a scan says Gmail access expired.</p>
         </a>
         <button
           type="button"
@@ -69,9 +67,6 @@ export default function SettingsPage() {
           className="block w-full rounded-2xl border border-ink-900/10 bg-white px-5 py-4 text-left text-sm font-medium text-ink-900"
         >
           Disconnect Gmail
-          <p className="mt-1 font-normal text-ink-700">
-            Revoke Tidimail access and delete the mail data we stored. You can sign in again later.
-          </p>
         </button>
         <button
           type="button"
@@ -79,9 +74,6 @@ export default function SettingsPage() {
           className="block w-full rounded-2xl border border-clay-500/30 bg-white px-5 py-4 text-left text-sm font-medium text-clay-600"
         >
           Delete my Tidimail account
-          <p className="mt-1 font-normal text-ink-700">
-            Disconnect Gmail and remove your Tidimail login. Mail stays in Gmail.
-          </p>
         </button>
       </div>
 

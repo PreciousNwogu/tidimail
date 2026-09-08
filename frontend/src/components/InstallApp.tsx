@@ -57,16 +57,14 @@ export function InstallApp({
   return (
     <div className={variant === "hero" ? "mt-6" : "mt-6 max-w-md rounded-2xl bg-sage-50 px-4 py-4 text-ink-800"}>
       <p className="text-sm leading-relaxed">
-        {ios
-          ? "On iPhone or iPad, tap Share, then Add to Home Screen."
-          : "Install Tidimail on this device. It opens like an app. Your mail stays in Gmail."}
+        {ios ? "Safari → Share → Add to Home Screen." : "Install Tidimail on this device."}
       </p>
       {!ios ? (
         <button type="button" onClick={() => void install()} className={buttonClass}>
           {label}
         </button>
       ) : (
-        <p className="mt-3 text-sm font-medium text-ink-900">There is no Install button on iPhone — use Share → Add to Home Screen.</p>
+        <p className="mt-3 text-sm font-medium text-ink-900">Use Share → Add to Home Screen.</p>
       )}
       {help && !canPrompt ? (
         <p className="mt-3 text-sm text-ink-700">

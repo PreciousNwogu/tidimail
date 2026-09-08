@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { CategoryChip } from "@/components/CategoryChip";
+import { PendingReviewList } from "@/components/PendingReviewList";
 import { api } from "@/lib/api";
 import { plural } from "@/lib/format";
 import type { Sender, SenderStatus } from "@/lib/types";
@@ -24,6 +25,7 @@ export default function SendersPage() {
   const query = useMemo(() => q.trim(), [q]);
 
   useEffect(() => {
+    if (status === "pending") return;
     const handle = window.setTimeout(() => {
       void api
         .senders({ status: status || undefined, q: query || undefined })
@@ -48,30 +50,38 @@ export default function SendersPage() {
             {filter.label}
           </button>
         ))}
+        {status !== "pending" ? (
         <input
           value={q}
           onChange={(event) => setQ(event.target.value)}
           placeholder="Search name or domain"
           className="ml-auto w-full min-w-[12rem] rounded-full border border-ink-900/10 bg-white px-4 py-2 text-sm sm:w-64"
         />
+        ) : null}
       </div>
       {error ? <p className="mt-4 text-clay-600">{error}</p> : null}
-      <ul className="mt-6 divide-y divide-ink-900/8 rounded-3xl border border-ink-900/8 bg-white/80">
-        {rows.map((sender) => (
-          <li key={sender.id}>
-            <Link href={`/senders/${sender.id}`} className="flex items-center justify-between gap-4 px-5 py-4 hover:bg-linen-50">
-              <div>
-                <p className="font-medium">{sender.name}</p>
-                <p className="text-sm text-ink-700">{sender.email}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <CategoryChip value={sender.status} />
-                <span className="text-sm text-ink-700">{plural(sender.message_count, "email", "emails")}</span>
-              </div>
-            </Link>
-          </li>
-        ))}
-      </ul>
+      {status === "pending" ? (
+        <div className="mt-6">
+          <PendingReviewList />
+        </div>
+      ) : (
+        <ul className="mt-6 divide-y divide-ink-900/8 rounded-3xl border border-ink-900/8 bg-white/80">
+          {rows.map((sender) => (
+            <li key={sender.id}>
+              <Link href={`/senders/${sender.id}`} className="flex items-center justify-between gap-4 px-5 py-4 hover:bg-linen-50">
+                <div>
+                  <p className="font-medium">{sender.name}</p>
+                  <p className="text-sm text-ink-700">{sender.email}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CategoryChip value={sender.status} />
+                  <span className="text-sm text-ink-700">{plural(sender.message_count, "email", "emails")}</span>
+                </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

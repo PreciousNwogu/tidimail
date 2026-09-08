@@ -88,9 +88,8 @@ export default function SummaryPage() {
         <p className="mt-4 text-sm text-ink-700">
           Still grouping the rest of your inbox
           {account?.sync_scanned_count
-            ? ` — ${account.sync_scanned_count.toLocaleString()} emails so far`
-            : ""}
-          . You can review now; totals will climb as we go.
+            ? ` — ${account.sync_scanned_count.toLocaleString()} emails so far.`
+            : "."}
         </p>
       ) : null}
       <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -99,11 +98,7 @@ export default function SummaryPage() {
         <Stat label="Suggested unsubscribe" value={stats.recommended_unsubscribe} />
         <Stat label="Suggested digest" value={stats.recommended_digest} />
         <Stat label="Suggested keep" value={stats.recommended_keep} />
-        <Stat
-          label="Quiet score"
-          value={stats.quiet_score}
-          hint={`${stats.quiet_score}% of scanned mail is already out of your inbox.`}
-        />
+        <Stat label="Quiet score" value={stats.quiet_score} />
       </div>
       {error ? <p className="mt-4 text-sm text-clay-600">{error}</p> : null}
       <div className="mt-8 flex flex-wrap gap-3">
@@ -125,7 +120,7 @@ export default function SummaryPage() {
       <ConfirmDialog
         open={confirm}
         title="Apply the noisy ones?"
-        body="We’ll digest and unsubscribe every pending recommendation. Keep stays in the stack so you can look at people and receipts. Undo stays open for 24 hours. Digested and unsubscribed mail is moved to Gmail Trash after 30 days."
+        body="Digest and unsubscribe pending recommendations. Keep is left for you. Undo 24 hours."
         confirmLabel="Apply recommendations"
         busy={busy}
         onClose={() => setConfirm(false)}

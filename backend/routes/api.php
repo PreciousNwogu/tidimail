@@ -26,6 +26,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/sweep/apply-recommendations', [SweepController::class, 'applyRecommendations']);
 
     Route::get('/senders', [SenderController::class, 'index']);
+    Route::get('/senders/pending-ids', [SenderController::class, 'pendingIds']);
+    Route::post('/senders/review-bulk', [SenderController::class, 'reviewBulk']);
     Route::get('/senders/{sender}', [SenderController::class, 'show']);
     Route::post('/senders/{sender}/review', [SenderController::class, 'review']);
 

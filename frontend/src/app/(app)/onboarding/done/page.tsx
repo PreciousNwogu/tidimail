@@ -36,11 +36,7 @@ export default function DonePage() {
         Archived {summary.archived} emails. Unsubscribed {summary.unsubscribed} senders.
         {summary.pending || summary.kept ? ` ${summary.kept + summary.pending} still need you.` : ""}
       </h1>
-      <p className="mt-4 text-ink-700">
-        {summary.digested} went to Digest. Undo stays open for 24 hours. Digest and Unsubscribe mail is moved to Gmail
-        Trash after 30 days. Tidimail will scan again tomorrow on its own — install the app so today&apos;s sweep is on
-        your home screen.
-      </p>
+      <p className="mt-4 text-ink-700">Undo for 24 hours.</p>
       {error ? <p className="mt-4 text-sm text-clay-600">{error}</p> : null}
       <div className="mt-8 flex flex-wrap gap-3">
         <button

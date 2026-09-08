@@ -182,6 +182,110 @@ class SenderReviewLoopTest extends TestCase
         $this->assertSame('https://shop.com/unsub', $this->gmail->unsubscribes[0]['url']);
         $this->assertTrue($this->gmail->unsubscribes[0]['one_click']);
         $this->assertSame(InboxActionStatus::Confirmed, $sender->inboxActions()->first()->status);
+        $this->assertNotContains('promo-1', $this->gmail->trashed);
+        $this->assertFalse($sender->fresh()->trash_unsubscribed_immediately);
+        $this->assertNotNull($sender->messages()->first()?->purge_at);
+        $this->assertNull($sender->messages()->first()?->purged_at);
+    }
+
+    public function test_unsubscribe_trash_now_moves_mail_to_gmail_trash_immediately(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $sender = Sender::factory()->for($account)->create([
+            'email' => 'deals@shop.com',
+            'has_list_unsubscribe' => true,
+            'list_unsubscribe_header' => '<https://shop.com/unsub>',
+            'list_unsubscribe_post' => 'List-Unsubscribe=One-Click',
+            'recommendation' => SenderRecommendation::Unsubscribe,
+        ]);
+        Message::factory()->for($account)->for($sender)->create([
+            'gmail_id' => 'promo-now',
+            'is_in_inbox' => true,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $review = $this->postJson("/api/senders/{$sender->id}/review", [
+            'action' => 'unsubscribe',
+            'trash_now' => true,
+        ])
+            ->assertOk()
+            ->assertJsonPath('sender.status', 'unsubscribed')
+            ->assertJsonPath('action.trashed_now', true);
+
+        $this->assertContains('promo-now', $this->gmail->trashed);
+        $this->assertTrue($sender->fresh()->trash_unsubscribed_immediately);
+        $this->assertNull($sender->messages()->first()?->purge_at);
+        $this->assertNotNull($sender->messages()->first()?->purged_at);
+        $this->assertFalse($sender->messages()->where('is_in_inbox', true)->exists());
+
+        $actionId = $review->json('action.id');
+
+        $this->postJson("/api/actions/{$actionId}/undo")
+            ->assertOk()
+            ->assertJsonPath('action.status', 'undone');
+
+        $this->assertTrue($sender->fresh()->status === SenderStatus::Pending);
+        $this->assertFalse($sender->fresh()->trash_unsubscribed_immediately);
+        $this->assertTrue($sender->messages()->where('is_in_inbox', true)->exists());
+        $this->assertNull($sender->messages()->first()?->purged_at);
+        $this->assertContains('TRASH', $this->gmail->batchModifies[array_key_last($this->gmail->batchModifies)]['remove']);
+    }
+
+    public function test_digest_trash_now_moves_mail_to_gmail_trash_immediately(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $sender = Sender::factory()->digest()->for($account)->create();
+        Message::factory()->for($account)->for($sender)->create([
+            'gmail_id' => 'digest-now',
+            'is_in_inbox' => true,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson("/api/senders/{$sender->id}/review", [
+            'action' => 'digest',
+            'trash_now' => true,
+        ])
+            ->assertOk()
+            ->assertJsonPath('sender.status', 'digest')
+            ->assertJsonPath('action.trashed_now', true);
+
+        $this->assertContains('digest-now', $this->gmail->trashed);
+        $this->assertTrue($sender->fresh()->trash_unsubscribed_immediately);
+        $this->assertNull($sender->messages()->first()?->purge_at);
+        $this->assertNotNull($sender->messages()->first()?->purged_at);
+    }
+
+    public function test_unsubscribed_sender_with_trash_now_auto_trashes_new_mail(): void
+    {
+        $account = Account::factory()->create();
+        Sender::factory()->for($account)->create([
+            'email' => 'deals@shop.com',
+            'name' => 'Deals',
+            'status' => SenderStatus::Unsubscribed,
+            'trash_unsubscribed_immediately' => true,
+            'has_list_unsubscribe' => true,
+            'list_unsubscribe_header' => '<https://shop.com/unsub>',
+        ]);
+
+        $this->gmail->seedMessage('new-unsub', [
+            'From' => 'Deals <deals@shop.com>',
+            'Subject' => 'Still mailing you',
+            'List-Unsubscribe' => '<https://shop.com/unsub>',
+        ], ['INBOX', 'UNREAD', 'CATEGORY_PROMOTIONS']);
+
+        app(InboxSyncService::class)->sync($account);
+
+        $sender = Sender::query()->where('email', 'deals@shop.com')->first();
+
+        $this->assertSame(SenderStatus::Unsubscribed, $sender->status);
+        $this->assertContains('new-unsub', $this->gmail->trashed);
+        $this->assertFalse($sender->messages()->where('is_in_inbox', true)->exists());
+        $this->assertNotNull($sender->messages()->first()?->purged_at);
+        $this->assertTrue((bool) $sender->inboxActions()->latest()->first()->metadata['trash_now']);
     }
 
     public function test_already_reviewed_senders_auto_digest_new_mail_on_sync(): void
@@ -254,6 +358,102 @@ class SenderReviewLoopTest extends TestCase
 
         $this->postJson("/api/senders/{$other->id}/review", ['action' => 'keep'])
             ->assertNotFound();
+    }
+
+    public function test_bulk_review_applies_one_action_to_selected_senders(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $digestOne = Sender::factory()->digest()->for($account)->create();
+        $digestTwo = Sender::factory()->digest()->for($account)->create();
+        $keep = Sender::factory()->keep()->for($account)->create();
+        $foreign = Sender::factory()->create();
+
+        foreach ([$digestOne, $digestTwo, $keep] as $sender) {
+            Message::factory()->for($account)->for($sender)->create(['is_in_inbox' => true]);
+        }
+
+        Sanctum::actingAs($user);
+
+        $this->getJson('/api/senders/pending-ids')
+            ->assertOk()
+            ->assertJsonPath('total', 3);
+
+        $this->postJson('/api/senders/review-bulk', [
+            'action' => 'digest',
+            'sender_ids' => [$digestOne->id, $digestTwo->id, $foreign->id],
+        ])
+            ->assertOk()
+            ->assertJsonPath('applied_count', 2);
+
+        $this->assertSame(SenderStatus::Digest, $digestOne->fresh()->status);
+        $this->assertSame(SenderStatus::Digest, $digestTwo->fresh()->status);
+        $this->assertSame(SenderStatus::Pending, $keep->fresh()->status);
+        $this->assertSame(SenderStatus::Pending, $foreign->fresh()->status);
+    }
+
+    public function test_bulk_unsubscribe_digests_senders_without_a_header(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $list = Sender::factory()->for($account)->create([
+            'has_list_unsubscribe' => true,
+            'list_unsubscribe_header' => '<https://shop.com/unsub>',
+        ]);
+        $noHeader = Sender::factory()->keep()->for($account)->create();
+
+        Message::factory()->for($account)->for($list)->create(['is_in_inbox' => true]);
+        Message::factory()->for($account)->for($noHeader)->create(['is_in_inbox' => true]);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/senders/review-bulk', [
+            'action' => 'unsubscribe',
+            'sender_ids' => [$list->id, $noHeader->id],
+        ])
+            ->assertOk()
+            ->assertJsonPath('applied_count', 2);
+
+        $this->assertSame(SenderStatus::Unsubscribed, $list->fresh()->status);
+        $this->assertSame(SenderStatus::Digest, $noHeader->fresh()->status);
+    }
+
+    public function test_bulk_trash_now_moves_mail_to_gmail_trash_immediately(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $list = Sender::factory()->for($account)->create([
+            'has_list_unsubscribe' => true,
+            'list_unsubscribe_header' => '<https://shop.com/unsub>',
+        ]);
+        $noHeader = Sender::factory()->keep()->for($account)->create();
+
+        Message::factory()->for($account)->for($list)->create([
+            'gmail_id' => 'bulk-now-1',
+            'is_in_inbox' => true,
+        ]);
+        Message::factory()->for($account)->for($noHeader)->create([
+            'gmail_id' => 'bulk-now-2',
+            'is_in_inbox' => true,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/senders/review-bulk', [
+            'action' => 'unsubscribe',
+            'trash_now' => true,
+            'sender_ids' => [$list->id, $noHeader->id],
+        ])
+            ->assertOk()
+            ->assertJsonPath('applied_count', 2)
+            ->assertJsonPath('applied.0.trashed_now', true);
+
+        $this->assertContains('bulk-now-1', $this->gmail->trashed);
+        $this->assertContains('bulk-now-2', $this->gmail->trashed);
+        $this->assertTrue($list->fresh()->trash_unsubscribed_immediately);
+        $this->assertTrue($noHeader->fresh()->trash_unsubscribed_immediately);
+        $this->assertSame(SenderStatus::Unsubscribed, $list->fresh()->status);
+        $this->assertSame(SenderStatus::Digest, $noHeader->fresh()->status);
     }
 
     public function test_due_digest_mail_is_moved_to_gmail_trash(): void

@@ -3,18 +3,14 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { googleRedirectUrl } from "@/lib/api";
-import { setToken } from "@/lib/auth";
-import { resetDemoInbox } from "@/lib/demo";
+import { beginDemo } from "@/lib/start-demo";
 import { useSession } from "@/lib/session";
-import { emptySummary, writeSummary } from "@/lib/summary";
 import { InstallApp } from "@/components/InstallApp";
 
 const googleErrors: Record<string, string> = {
-  google_not_configured:
-    "Google sign-in is not set up yet. Add your Google client ID and secret to the backend .env, then try again.",
-  google_failed: "Google sign-in didn’t finish. Try Sign in with Google again.",
-  google_missing_gmail_scope:
-    "Google signed you in, but Gmail access was not granted. Add the Gmail modify scope in Google Cloud, then sign in again and allow Gmail.",
+  google_not_configured: "Google sign-in is not set up yet.",
+  google_failed: "Google sign-in didn’t finish. Try again.",
+  google_missing_gmail_scope: "Gmail access was not granted. Allow Gmail and try again.",
 };
 
 export function LandingActions() {
@@ -27,10 +23,8 @@ export function LandingActions() {
     if (code && googleErrors[code]) setError(googleErrors[code]);
   }, []);
 
-  async function trySample() {
-    resetDemoInbox();
-    writeSummary(emptySummary());
-    setToken("demo", "demo");
+  async function tryDemo() {
+    beginDemo();
     await refresh();
     router.push("/onboarding/trust");
   }
@@ -49,10 +43,10 @@ export function LandingActions() {
         <InstallApp variant="button" />
         <button
           type="button"
-          onClick={() => void trySample()}
+          onClick={() => void tryDemo()}
           className="rounded-full border border-ink-900/15 bg-white/70 px-5 py-2.5 text-sm font-medium text-ink-800 hover:border-sage-600"
         >
-          Try a sample inbox
+          Try the demo
         </button>
       </div>
     </div>

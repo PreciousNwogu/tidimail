@@ -22,6 +22,7 @@ class InboxActionResource extends JsonResource
             'undone_at' => $this->undone_at?->toIso8601String(),
             'proof' => $this->metadata['proof'] ?? null,
             'auto_applied' => (bool) ($this->metadata['auto_applied'] ?? false),
+            'trashed_now' => (bool) ($this->metadata['trash_now'] ?? false),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }

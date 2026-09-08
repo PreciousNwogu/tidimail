@@ -71,6 +71,8 @@ Until Google approves `gmail.modify`, **only test users** can sign in.
 5. Publish the consent screen (Production)  
 6. Submit **gmail.modify** for restricted-scope verification  
 
+Record a **screencast of the live Gmail app** for Google: Sign in → Scan → Keep / Digest / Unsubscribe → Undo → Disconnect in Settings. Do not use the homepage demo — that is fake mail. Drop a finished clip at `frontend/public/demo.mp4` if you want it on the homepage too.
+
 Google will ask what you read (headers, subject, labels, snippet, unsubscribe), what you never store (full bodies, attachments), and how to disconnect (`/settings` + [Google permissions](https://myaccount.google.com/permissions)). Use `/privacy` as the answer.
 
 Verification can take days or weeks. Plan a one-person beta with test users first.

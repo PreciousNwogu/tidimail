@@ -4,7 +4,7 @@ import Link from "next/link";
 import { CategoryChip } from "@/components/CategoryChip";
 import { ReviewButtons } from "@/components/ReviewButtons";
 import { initials, plural, relativeTime } from "@/lib/format";
-import type { ReviewAction, Sender } from "@/lib/types";
+import type { ReviewAction, ReviewOptions, Sender } from "@/lib/types";
 
 export function SenderCard({
   sender,
@@ -13,7 +13,7 @@ export function SenderCard({
 }: {
   sender: Sender;
   pending?: ReviewAction | null;
-  onAction: (action: ReviewAction) => void;
+  onAction: (action: ReviewAction, options?: ReviewOptions) => void;
 }) {
   return (
     <article className="rounded-3xl border border-ink-900/8 bg-white/80 p-5 shadow-card">
