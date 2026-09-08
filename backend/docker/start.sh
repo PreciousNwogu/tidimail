@@ -12,4 +12,13 @@ export LOG_CHANNEL="${LOG_CHANNEL:-stderr}"
 
 php artisan config:clear
 php artisan migrate --force --no-interaction
-exec php artisan serve --host=0.0.0.0 --port="${PORT:-8000}"
+
+# Same box must run jobs or the scan stays on "Starting the scan…"
+php artisan queue:work --sleep=1 --timeout=900 --tries=1 &
+QUEUE_PID=$!
+
+php artisan serve --host=0.0.0.0 --port="${PORT:-8000}" &
+SERVE_PID=$!
+
+trap 'kill $QUEUE_PID $SERVE_PID 2>/dev/null || true' EXIT INT TERM
+wait "$SERVE_PID"
