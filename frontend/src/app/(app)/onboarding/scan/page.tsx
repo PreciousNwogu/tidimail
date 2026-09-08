@@ -58,8 +58,8 @@ export default function ScanPage() {
                 : status}
       </p>
       <p className="mx-auto mt-2 max-w-sm text-sm text-ink-700/80">
-        You can start reviewing as soon as the noisiest senders are grouped. We keep scanning thousands of messages in
-        the background — only sender, subject, labels, and unsubscribe details, never the full body.
+        You stay on this screen until the last 30 days of inbox mail is grouped — sender, subject, labels, and
+        unsubscribe details, never the full body.
       </p>
       {error ? (
         <div className="mt-6 space-y-3">

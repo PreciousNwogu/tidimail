@@ -80,15 +80,15 @@ export const api = {
     }
 
     const started = Date.now();
-    while (Date.now() - started < 180_000) {
+    while (Date.now() - started < 900_000) {
       try {
         const me = await request<MeResponse>("/api/me");
         const account = asList(me.accounts).find((row) => row.id === accountId) ?? asList(me.accounts)[0];
         if (account) onTick?.(account);
-        if (account?.sync_status === "failed" && !account.last_synced_at) {
+        if (account?.sync_status === "failed") {
           throw new ApiRequestError(502, account.sync_error ?? "We could not finish reading Gmail. Try again in a moment.");
         }
-        if (account?.last_synced_at || account?.sync_status === "ready" || account?.sync_status === "idle") {
+        if (account?.sync_status === "idle" && account.last_synced_at) {
           return account;
         }
       } catch (err) {

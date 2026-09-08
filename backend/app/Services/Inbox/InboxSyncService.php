@@ -77,11 +77,11 @@ class InboxSyncService
 
         $queries = [
             'clutter' => sprintf(
-                'newer_than:%dd (category:promotions OR category:social OR category:updates OR category:forums)',
+                'in:inbox newer_than:%dd (category:promotions OR category:social OR category:updates OR category:forums)',
                 $lookbackDays
             ),
             'rest' => sprintf(
-                'newer_than:%dd -category:promotions -category:social -category:updates -category:forums',
+                'in:inbox newer_than:%dd -category:promotions -category:social -category:updates -category:forums',
                 $lookbackDays
             ),
         ];
@@ -120,8 +120,8 @@ class InboxSyncService
                 $scanned += count($ids);
                 $account->forceFill(['sync_scanned_count' => $scanned])->save();
 
-                if ($account->last_synced_at === null && $touched !== []) {
-                    $this->markReady($account, array_values($touched));
+                if ($touched !== []) {
+                    $this->refreshSenders($account, array_values($touched));
                 }
 
                 $pageToken = $page['nextPageToken'] ?? null;
@@ -129,27 +129,9 @@ class InboxSyncService
                     break;
                 }
             }
-
-            if ($account->last_synced_at === null && $touched !== []) {
-                $this->markReady($account, array_values($touched));
-            }
         }
 
         return array_values($touched);
-    }
-
-    /**
-     * @param  list<int>  $senderIds
-     */
-    private function markReady(Account $account, array $senderIds): void
-    {
-        $this->refreshSenders($account, $senderIds);
-
-        $account->forceFill([
-            'last_synced_at' => now(),
-            'sync_status' => 'ready',
-            'sync_error' => null,
-        ])->save();
     }
 
     private function upsertMessage(Account $account, string $gmailId, ?array $raw = null): ?Sender
