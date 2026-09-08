@@ -80,7 +80,7 @@ export const api = {
     }
 
     const started = Date.now();
-    while (Date.now() - started < 900_000) {
+    while (Date.now() - started < 180_000) {
       try {
         const me = await request<MeResponse>("/api/me");
         const account = asList(me.accounts).find((row) => row.id === accountId) ?? asList(me.accounts)[0];
@@ -88,7 +88,10 @@ export const api = {
         if (account?.sync_status === "failed") {
           throw new ApiRequestError(502, account.sync_error ?? "We could not finish reading Gmail. Try again in a moment.");
         }
-        if (account?.sync_status === "idle" && account.last_synced_at) {
+        if (
+          (account?.sync_status === "ready" || account?.sync_status === "idle") &&
+          account.last_synced_at
+        ) {
           return account;
         }
       } catch (err) {
@@ -96,7 +99,7 @@ export const api = {
           throw err;
         }
       }
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
     }
 
     throw new ApiRequestError(504, "Scan is taking longer than expected. Try again.");

@@ -7,23 +7,44 @@ import { Stat } from "@/components/Stat";
 import { api } from "@/lib/api";
 import { addToSummary, writeSummary, emptySummary } from "@/lib/summary";
 import { useToast } from "@/lib/toast";
+import { useSession } from "@/lib/session";
 import type { SweepResponse } from "@/lib/types";
 import { asList } from "@/lib/types";
 
 export default function SummaryPage() {
   const router = useRouter();
   const { push } = useToast();
+  const { account, refresh } = useSession();
   const [sweep, setSweep] = useState<SweepResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
+  const stillScanning = Boolean(
+    account && account.sync_status !== "idle" && account.sync_status !== "failed",
+  );
 
   useEffect(() => {
-    void api
-      .sweep()
-      .then(setSweep)
-      .catch((err) => setError(err instanceof Error ? err.message : "Could not load the sweep."));
-  }, []);
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const next = await api.sweep();
+        if (!cancelled) setSweep(next);
+        await refresh();
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Could not load the sweep.");
+      }
+    }
+
+    void load();
+    if (!stillScanning) return;
+
+    const timer = window.setInterval(() => void load(), 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [refresh, stillScanning]);
 
   async function applyAll() {
     setBusy(true);
@@ -63,6 +84,15 @@ export default function SummaryPage() {
       <h1 className="mt-3 max-w-2xl font-serif text-4xl tracking-tight">
         {stats.senders_total} senders. That’s the actual problem.
       </h1>
+      {stillScanning ? (
+        <p className="mt-4 text-sm text-ink-700">
+          Still grouping the rest of your inbox
+          {account?.sync_scanned_count
+            ? ` — ${account.sync_scanned_count.toLocaleString()} emails so far`
+            : ""}
+          . You can review now; totals will climb as we go.
+        </p>
+      ) : null}
       <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Stat label="Senders found" value={stats.senders_total} />
         <Stat label="Emails scanned" value={stats.messages_scanned} />

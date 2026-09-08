@@ -25,6 +25,8 @@ class Account extends Model
         'sync_status',
         'sync_error',
         'sync_scanned_count',
+        'sync_phase',
+        'sync_page_token',
         'cleanup_pending_count',
         'cleanup_alert_at',
         'gmail_label_ids',

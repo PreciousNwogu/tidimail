@@ -20,20 +20,29 @@ class SyncInboxJob implements ShouldQueue, ShouldBeUnique
 
     public int $timeout = 900;
 
-    public int $uniqueFor = 900;
+    public int $uniqueFor = 180;
 
-    public function __construct(public Account $account)
+    public function __construct(public Account $account, public bool $continue = false)
     {
     }
 
     public function uniqueId(): string
     {
-        return 'sync-account-'.$this->account->id;
+        return $this->continue
+            ? 'sync-account-'.$this->account->id.'-more'
+            : 'sync-account-'.$this->account->id;
     }
 
     public function handle(InboxSyncService $sync, ScanAlertService $alerts): void
     {
-        $sync->sync($this->account);
-        $alerts->notifyAfterScan($this->account->fresh());
+        $account = $sync->sync($this->account, ! $this->continue);
+
+        if ($account->sync_phase) {
+            self::dispatch($account, true)->delay(now()->addSeconds(2));
+
+            return;
+        }
+
+        $alerts->notifyAfterScan($account->fresh());
     }
 }

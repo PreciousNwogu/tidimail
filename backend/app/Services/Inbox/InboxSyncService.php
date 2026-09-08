@@ -21,15 +21,24 @@ class InboxSyncService
     ) {
     }
 
-    public function sync(Account $account): Account
+    public function sync(Account $account, bool $fresh = true): Account
     {
         set_time_limit(900);
 
-        $account->forceFill([
-            'sync_status' => 'running',
-            'sync_error' => null,
-            'sync_scanned_count' => 0,
-        ])->save();
+        if ($fresh) {
+            $account->forceFill([
+                'sync_status' => 'running',
+                'sync_error' => null,
+                'sync_scanned_count' => 0,
+                'sync_phase' => 'clutter',
+                'sync_page_token' => null,
+            ])->save();
+        } else {
+            $account->forceFill([
+                'sync_status' => 'running',
+                'sync_error' => null,
+            ])->save();
+        }
 
         try {
             $profile = $this->gmail->getProfile($account);
@@ -37,14 +46,26 @@ class InboxSyncService
                 $account->last_history_id = (string) $profile['historyId'];
             }
 
-            $touchedSenderIds = $this->ingestMessages($account);
+            $hasMore = $this->ingestMessages($account);
+            $account->refresh();
+
+            if ($hasMore) {
+                return $account;
+            }
+
+            $touchedSenderIds = Sender::query()
+                ->where('account_id', $account->id)
+                ->pluck('id')
+                ->all();
             $this->refreshSenders($account, $touchedSenderIds);
             $this->applyExistingDecisions($account, $touchedSenderIds);
 
             $account->forceFill([
                 'sync_status' => 'idle',
-                'last_synced_at' => $account->last_synced_at ?? now(),
+                'last_synced_at' => now(),
                 'sync_error' => null,
+                'sync_phase' => null,
+                'sync_page_token' => null,
             ])->save();
         } catch (Throwable $exception) {
             $friendly = GmailException::sanitize($exception);
@@ -66,72 +87,135 @@ class InboxSyncService
     }
 
     /**
-     * @return list<int>
+     * @return bool True when more inbox pages remain
      */
-    private function ingestMessages(Account $account): array
+    private function ingestMessages(Account $account): bool
     {
-        $lookbackDays = (int) config('tidimail.sync_lookback_days', 30);
-        $max = (int) config('tidimail.sync_max_messages', 5000);
-        $touched = [];
-        $scanned = 0;
-
-        $queries = [
-            'clutter' => sprintf(
-                'in:inbox newer_than:%dd (category:promotions OR category:social OR category:updates OR category:forums)',
-                $lookbackDays
-            ),
-            'rest' => sprintf(
-                'in:inbox newer_than:%dd -category:promotions -category:social -category:updates -category:forums',
-                $lookbackDays
-            ),
+        $max = (int) config('tidimail.sync_max_messages', 100000);
+        $chunk = (int) config('tidimail.sync_chunk_messages', 300);
+        $phases = [
+            'clutter' => 'in:inbox (category:promotions OR category:social OR category:updates OR category:forums)',
+            'rest' => 'in:inbox -category:promotions -category:social -category:updates -category:forums',
         ];
+        $order = array_keys($phases);
+        $phase = $account->sync_phase && isset($phases[$account->sync_phase])
+            ? $account->sync_phase
+            : 'clutter';
+        $pageToken = $account->sync_page_token;
+        $scanned = (int) $account->sync_scanned_count;
+        $run = 0;
+        $touched = [];
 
-        foreach ($queries as $phase => $query) {
-            $pageToken = null;
+        while ($scanned < $max && $run < $chunk) {
+            $page = $this->gmail->listRecentMessageIds(
+                $account,
+                min(100, $max - $scanned, $chunk - $run),
+                $pageToken,
+                0,
+                $phases[$phase]
+            );
+            $ids = $page['ids'];
 
-            while ($scanned < $max) {
-                $page = $this->gmail->listRecentMessageIds(
-                    $account,
-                    min(100, $max - $scanned),
-                    $pageToken,
-                    $lookbackDays,
-                    $query
-                );
-                $ids = $page['ids'];
+            if ($ids === []) {
+                $next = $this->nextPhase($order, $phase);
+                if ($next === null) {
+                    $this->saveCursor($account, $scanned, $touched, null, null);
 
-                if ($ids === []) {
-                    break;
+                    return false;
                 }
+                $phase = $next;
+                $pageToken = null;
+                continue;
+            }
 
-                $alreadyHave = Message::query()
-                    ->where('account_id', $account->id)
-                    ->whereIn('gmail_id', $ids)
-                    ->pluck('gmail_id')
-                    ->all();
-                $freshIds = array_values(array_diff($ids, $alreadyHave));
+            $alreadyHave = Message::query()
+                ->where('account_id', $account->id)
+                ->whereIn('gmail_id', $ids)
+                ->pluck('gmail_id')
+                ->all();
+            $freshIds = array_values(array_diff($ids, $alreadyHave));
 
-                foreach ($this->gmail->getMessageMetadataMany($account, $freshIds) as $gmailId => $raw) {
-                    $sender = $this->upsertMessage($account, (string) $gmailId, $raw);
-                    if ($sender) {
-                        $touched[$sender->id] = $sender->id;
-                    }
+            foreach ($this->gmail->getMessageMetadataMany($account, $freshIds) as $gmailId => $raw) {
+                $sender = $this->upsertMessage($account, (string) $gmailId, $raw);
+                if ($sender) {
+                    $touched[$sender->id] = $sender->id;
                 }
+            }
 
-                $scanned += count($ids);
+            $added = count($ids);
+            $scanned += $added;
+            $run += $added;
+            $pageToken = $page['nextPageToken'] ?? null;
+
+            if ($account->last_synced_at === null && $touched !== []) {
+                $this->markReady($account, array_values($touched), $scanned);
+            } else {
                 $account->forceFill(['sync_scanned_count' => $scanned])->save();
-
                 if ($touched !== []) {
                     $this->refreshSenders($account, array_values($touched));
                 }
+            }
 
-                $pageToken = $page['nextPageToken'] ?? null;
-                if (! $pageToken) {
-                    break;
+            if (! $pageToken) {
+                $next = $this->nextPhase($order, $phase);
+                if ($next === null) {
+                    $this->saveCursor($account, $scanned, $touched, null, null);
+
+                    return false;
                 }
+                $phase = $next;
+                $pageToken = null;
             }
         }
 
-        return array_values($touched);
+        $hasMore = $scanned < $max && ($pageToken || $this->nextPhase($order, $phase) !== null);
+        $this->saveCursor($account, $scanned, $touched, $hasMore ? $phase : null, $hasMore ? $pageToken : null);
+
+        return $hasMore;
+    }
+
+    /**
+     * @param  list<string>  $order
+     */
+    private function nextPhase(array $order, string $phase): ?string
+    {
+        $index = array_search($phase, $order, true);
+        if ($index === false || $index >= count($order) - 1) {
+            return null;
+        }
+
+        return $order[$index + 1];
+    }
+
+    /**
+     * @param  array<int, int>  $touched
+     */
+    private function saveCursor(Account $account, int $scanned, array $touched, ?string $phase, ?string $pageToken): void
+    {
+        $account->forceFill([
+            'sync_scanned_count' => $scanned,
+            'sync_phase' => $phase,
+            'sync_page_token' => $pageToken,
+        ])->save();
+
+        if ($touched !== []) {
+            $this->refreshSenders($account, array_values($touched));
+        }
+    }
+
+    /**
+     * @param  list<int>  $senderIds
+     */
+    private function markReady(Account $account, array $senderIds, int $scanned): void
+    {
+        $this->refreshSenders($account, $senderIds);
+
+        $account->forceFill([
+            'last_synced_at' => now(),
+            'sync_status' => 'ready',
+            'sync_error' => null,
+            'sync_scanned_count' => $scanned,
+        ])->save();
     }
 
     private function upsertMessage(Account $account, string $gmailId, ?array $raw = null): ?Sender

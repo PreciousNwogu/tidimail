@@ -12,10 +12,12 @@ return [
 
     'sync_lookback_days' => (int) env('TIDIMAIL_SYNC_LOOKBACK_DAYS', 30),
 
-    // Full pass: enough for a congested inbox. First pass unlocks review much sooner.
-    'sync_max_messages' => (int) env('TIDIMAIL_SYNC_MAX_MESSAGES', 5000),
+    // Whole inbox (no date cutoff). Chunked so first-time review unlocks quickly.
+    'sync_max_messages' => (int) env('TIDIMAIL_SYNC_MAX_MESSAGES', 100000),
 
-    'sync_ready_messages' => (int) env('TIDIMAIL_SYNC_READY_MESSAGES', 300),
+    'sync_chunk_messages' => (int) env('TIDIMAIL_SYNC_CHUNK_MESSAGES', 300),
+
+    'sync_ready_messages' => (int) env('TIDIMAIL_SYNC_READY_MESSAGES', 50),
 
     'daily_sync_at' => env('TIDIMAIL_DAILY_SYNC_AT', '06:00'),
 

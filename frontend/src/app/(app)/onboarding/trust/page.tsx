@@ -71,7 +71,7 @@ export default function TrustPage() {
         disabled={busy}
         className="mt-8 rounded-full bg-ink-900 px-5 py-3 text-sm font-medium text-linen-50 disabled:opacity-50"
       >
-        {busy ? "Starting…" : "Scan the last 30 days"}
+        {busy ? "Starting…" : "Scan your inbox"}
       </button>
     </div>
   );
